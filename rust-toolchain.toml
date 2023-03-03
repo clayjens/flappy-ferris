@@ -1,0 +1,3 @@
+# Use nightly compiler to access latest performance improvements
+[toolchain]
+channel = "nightly"
