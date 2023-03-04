@@ -18,19 +18,18 @@ struct Velocity {
     y: f32,
 }
 
-#[derive(Component, Debug)]
-struct RotateWhileFalling;
-
 fn main() {
+    let ferris_system_set = SystemSet::new()
+        .with_system(sys_apply_ferris_gravity)
+        .with_system(sys_apply_ferris_velocity)
+        .with_system(sys_apply_ferris_rotation)
+        .with_system(sys_handle_ferris_input);
+
     App::new()
         .add_plugin(LoaderPlugin)
         .add_plugins(utils::modify_default_plugins())
         .add_startup_system_to_stage(StartupStage::PostStartup, sys_spawn_ferris)
-        .add_system(sys_apply_gravity)
-        .add_system(sys_apply_velocity)
-        .add_system(sys_input)
-        .add_system(sys_apply_rotation)
-        .add_system(bevy::window::close_on_esc)
+        .add_system_set(ferris_system_set)
         .run();
 }
 
@@ -48,26 +47,29 @@ fn sys_spawn_ferris(mut cmds: Commands, game_assets: Res<GameAssets>) {
         },
         Ferris,
         Velocity::default(),
-        RotateWhileFalling,
     );
 
     cmds.spawn(ferris_bundle);
 }
 
-fn sys_apply_gravity(mut q: Query<&mut Velocity>) {
-    for mut velocity in q.iter_mut() {
-        velocity.y -= 8.;
-    }
+fn sys_apply_ferris_gravity(mut q: Query<&mut Velocity>) {
+    const GRAVITY: f32 = 9.8;
+
+    let mut velocity = q.single_mut();
+    velocity.y -= GRAVITY;
 }
 
-fn sys_apply_velocity(mut q: Query<(&Velocity, &mut Transform)>, time: Res<Time>) {
-    for (velocity, mut transform) in q.iter_mut() {
-        transform.translation.x += velocity.x * time.delta_seconds();
-        transform.translation.y += velocity.y * time.delta_seconds();
-    }
+fn sys_apply_ferris_velocity(
+    mut q: Query<(&Velocity, &mut Transform), With<Ferris>>,
+    time: Res<Time>,
+) {
+    let (velocity, mut transform) = q.single_mut();
+
+    transform.translation.x += velocity.x * time.delta_seconds();
+    transform.translation.y += velocity.y * time.delta_seconds();
 }
 
-fn sys_input(kb: Res<Input<KeyCode>>, mut q: Query<&mut Velocity, With<Ferris>>) {
+fn sys_handle_ferris_input(kb: Res<Input<KeyCode>>, mut q: Query<&mut Velocity, With<Ferris>>) {
     const FERRIS_JUMP_POWER: f32 = 225.;
 
     if let Ok(mut velocity) = q.get_single_mut() {
@@ -77,15 +79,13 @@ fn sys_input(kb: Res<Input<KeyCode>>, mut q: Query<&mut Velocity, With<Ferris>>)
     }
 }
 
-fn sys_apply_rotation(
-    mut q: Query<(&Velocity, &mut Transform), With<RotateWhileFalling>>,
+fn sys_apply_ferris_rotation(
+    mut q: Query<(&Velocity, &mut Transform), With<Ferris>>,
     time: Res<Time>,
 ) {
-    let rotation_speed = f32::to_radians(360.);
-    for (velocity, mut transform) in q.iter_mut() {
-        let rotation_angle = rotation_speed * time.delta_seconds();
-        let rotation_sign = f32::copysign(1.0, velocity.y);
+    let (velocity, mut transform) = q.single_mut();
+    let rotation_sign = f32::copysign(1.0, velocity.y);
+    let rotation_angle = rotation_sign * 180.;
 
-        transform.rotate_z(rotation_sign * rotation_angle);
-    }
+    transform.rotate_z(f32::to_radians(rotation_angle) * time.delta_seconds());
 }
